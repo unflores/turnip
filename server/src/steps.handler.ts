@@ -106,17 +106,29 @@ export default class StepsHandler {
      */
     getStepRegExp(): RegExp {
         //  step ":user で伝言を開く" do |user|
-        let r = new RegExp('^(\\s*?)step(\\s+)"([^"]+?)"(\\s+)do([\\s\\S]*)$');
-        //group[3]= :user で伝言を開く
-        return r;
+        // 0 => everything
+        // 1 => declaration with quotes
+        // 2 => double quote declaration without quotes
+        // 3 => single quote declaration without quotes
+        // 4 => arguments passed |blah, blah, blah|
+        return new RegExp('^\\s*?step\\s+("([^"]+?)"|\'([^\']+?)\')\\s+do([\\s\\S]*)$');
     }
     
     /**
      * if line is a step sentence return its regExp match result.
      * @param line
      */
-    getMatch(line: string): RegExpMatchArray {
-        return line.match(this.getStepRegExp());
+    getMatch(line: string) {
+        let matches = line.match(this.getStepRegExp());
+        if(!matches){
+            return null;
+        }
+        return {
+            entireLine: matches[0],
+            stepQuoted: matches[1],
+            pureStep: matches[2] || matches[3],
+            arguments: matches[4]
+        };
     }
     /**
      * translate turnip step format to regexp format.
@@ -224,13 +236,12 @@ export default class StepsHandler {
         let definitionFile = getFileContent(filePath);
         definitionFile = clearComments(definitionFile);
         return definitionFile.split(/\r?\n/g).reduce((steps, line, lineIndex) => {
-            let match = this.getMatch(line);
-            if (match) {
-                //let [, beforeGherkin, , , stepPart] = match;
-                let [, beforeGherkin, ,stepPart] = match;
-                let pos = Position.create(lineIndex, beforeGherkin.length);
-                let def = Location.create(getOSPath(filePath), Range.create(pos, pos));
-                steps = steps.concat(this.getSteps(line, stepPart, def));
+            const matches = this.getMatch(line);
+            if (matches) {
+                const { pureStep } = matches
+                const pos = Position.create(lineIndex, 0);
+                const def = Location.create(getOSPath(filePath), Range.create(pos, pos));
+                steps = steps.concat(this.getSteps(line, pureStep, def));
             }
             return steps;
         }, []);
